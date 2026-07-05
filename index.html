@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Patient Queue Tracker</title>
+<style>
+  :root{
+    --ink:#12232b;
+    --paper:#f3f6f5;
+    --card:#ffffff;
+    --line:#d7e1df;
+    --teal:#1f6f66;
+    --teal-dark:#154f49;
+    --amber:#c9781f;
+    --amber-soft:#fbe8d3;
+    --danger:#b3423a;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html, body{
+    height:auto;
+    min-height:100%;
+    overflow-x:hidden;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    -webkit-tap-highlight-color:transparent;
+    padding-bottom:60px;
+  }
+  header{
+    position:sticky; top:0; z-index:10;
+    background:var(--teal-dark);
+    color:#fff;
+    padding:14px 16px 12px;
+  }
+  header h1{
+    margin:0; font-size:17px; font-weight:700; letter-spacing:0.2px;
+  }
+  header .sub{
+    font-size:12px; opacity:0.75; margin-top:2px; font-family:var(--mono);
+  }
+  .tabs{
+    display:flex; gap:5px; margin-top:12px; flex-wrap:wrap;
+  }
+  .tab{
+    flex:1; min-width:70px; text-align:center; padding:8px 4px; font-size:12px; font-weight:600;
+    background:rgba(255,255,255,0.08); border-radius:8px; cursor:pointer; color:#fff;
+    border:1px solid transparent;
+  }
+  .tab.active{ background:#fff; color:var(--teal-dark); }
+
+  main{ padding:14px 12px 12px; max-width:640px; margin:0 auto; }
+
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:14px; margin-bottom:12px;
+  }
+
+  .field{ margin-bottom:12px; }
+  .field label{
+    display:block; font-size:12px; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.4px; color:var(--teal-dark); margin-bottom:6px;
+  }
+  .field input[type=text], .field select, .field textarea{
+    width:100%; padding:11px 12px; border:1.5px solid var(--line); border-radius:10px;
+    font-size:15px; font-family:var(--sans); background:#fbfdfc; color:var(--ink);
+  }
+  .field textarea{ resize:vertical; min-height:44px; }
+  .row2{ display:flex; gap:10px; }
+  .row2 > div{ flex:1; }
+
+  .swatch-row{ display:flex; align-items:center; gap:10px; }
+  .swatch{
+    width:26px; height:26px; border-radius:50%; border:2px solid var(--line);
+    flex-shrink:0;
+  }
+
+  button{
+    font-family:var(--sans); cursor:pointer; border:none; border-radius:10px;
+  }
+  .btn-primary{
+    width:100%; background:var(--teal); color:#fff; font-size:15px; font-weight:700;
+    padding:13px; margin-top:2px;
+  }
+  .btn-primary:active{ background:var(--teal-dark); }
+
+  .empty{
+    text-align:center; padding:40px 20px; color:#5b6b6a; font-size:14px;
+  }
+
+  .p-card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    margin-bottom:12px; overflow:hidden;
+  }
+  .p-head{
+    display:flex; align-items:center; gap:10px; padding:12px 14px; cursor:pointer;
+  }
+  .p-id{
+    font-family:var(--mono); font-weight:700; font-size:15px; color:var(--teal-dark);
+    background:var(--amber-soft); padding:3px 8px; border-radius:6px;
+  }
+  .p-meta{ flex:1; min-width:0; }
+  .p-meta .name{ font-size:13.5px; font-weight:600; }
+  .p-meta .features{ font-size:11.5px; color:#5b6b6a; margin-top:1px; }
+  .p-meta .elapsed{ font-size:11.5px; color:#6a7a79; font-family:var(--mono); }
+  .p-status{
+    font-size:10.5px; font-weight:700; text-transform:uppercase; padding:3px 7px;
+    border-radius:6px; letter-spacing:0.3px;
+  }
+  .p-status.active{ background:#e2f1e8; color:#1f7a4a; }
+  .p-status.completed{ background:#e9e9e9; color:#666; }
+  .chevron{ font-size:12px; color:#9aa5a4; transition:transform .15s; }
+  .p-card.open .chevron{ transform:rotate(90deg); }
+
+  .p-body{ display:none; padding:0 14px 14px; border-top:1px solid var(--line); }
+  .p-card.open .p-body{ display:block; }
+
+  .action-grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0;
+  }
+  .action-btn{
+    background:#eef4f3; color:var(--teal-dark); font-size:12.5px; font-weight:600;
+    padding:10px 6px; text-align:center; border:1px solid var(--line);
+  }
+  .action-btn:active{ background:var(--teal); color:#fff; }
+
+  .note-row{ display:flex; gap:8px; margin-bottom:12px; }
+  .note-row input{
+    flex:1; padding:10px 12px; border:1.5px solid var(--line); border-radius:10px; font-size:14px;
+  }
+  .note-row button{
+    background:var(--amber); color:#fff; font-weight:700; padding:0 16px; font-size:13px;
+  }
+
+  .log{
+    background:#0f1b1a; color:#9fe6c4; font-family:var(--mono); font-size:12px;
+    padding:12px; border-radius:10px; max-height:220px; overflow-y:auto;
+    white-space:pre-wrap; line-height:1.6;
+  }
+  .log .ln{ color:#e4f3ec; }
+  .log .ts{ color:#6fae9a; }
+
+  .footer-actions{ display:flex; gap:8px; margin-top:12px; }
+  .footer-actions button{
+    flex:1; padding:10px; font-size:12.5px; font-weight:700;
+  }
+  .btn-complete{ background:var(--danger); color:#fff; }
+  .btn-download{ background:var(--teal-dark); color:#fff; }
+  .btn-reopen{ background:#dde5e4; color:var(--ink); }
+
+  .toast{
+    position:fixed; bottom:18px; left:50%; transform:translateX(-50%);
+    background:var(--ink); color:#fff; padding:10px 18px; border-radius:20px;
+    font-size:13px; opacity:0; pointer-events:none; transition:opacity .25s;
+    z-index:50; max-width:90%; text-align:center;
+  }
+  .toast.show{ opacity:1; }
+
+  .conn-dot{
+    display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px;
+    background:#e0a12f;
+  }
+  .conn-dot.ok{ background:#4cc98a; }
+  .conn-dot.err{ background:#d3554b; }
+
+  .search-wrap{ margin-bottom:12px; position:relative; }
+  .search-wrap input{
+    width:100%; padding:12px 14px 12px 38px; border:1.5px solid var(--line);
+    border-radius:12px; font-size:15px; background:#fff;
+  }
+  .search-wrap::before{
+    content:"⌕"; position:absolute; left:13px; top:50%; transform:translateY(-50%);
+    font-size:18px; color:#8a9a99; font-weight:700;
+  }
+  .search-count{
+    font-size:11.5px; color:#6a7a79; margin:-6px 0 12px 4px; font-family:var(--mono);
+  }
+  .global-log{
+    background:#0f1b1a; color:#9fe6c4; font-family:var(--mono); font-size:12px;
+    padding:12px; border-radius:12px; max-height:65vh; overflow-y:auto;
+    white-space:pre-wrap; line-height:1.7;
+  }
+  .global-log .pid{ color:#f0c17a; font-weight:700; }
+  .global-log .ts{ color:#6fae9a; }
+  .global-log .ln{ color:#e4f3ec; }
+  .global-actions{ display:flex; gap:8px; margin-bottom:12px; }
+  .global-actions button{
+    flex:1; padding:10px; font-size:12.5px; font-weight:700;
+    background:var(--teal-dark); color:#fff;
+  }
+
+  .color-filter{ margin:8px 0; }
+  .color-filter input{
+    width:100%; padding:9px 12px; border:1.5px solid var(--line); border-radius:9px; font-size:13px;
+  }
+  .color-grid{
+    display:flex; flex-wrap:wrap; gap:8px; margin-bottom:4px; max-height:150px; overflow-y:auto;
+    padding:2px 2px 6px;
+  }
+  .color-chip{
+    display:flex; align-items:center; gap:6px; padding:6px 10px 6px 6px; border-radius:20px;
+    border:1.5px solid var(--line); background:#fff; cursor:pointer; font-size:12px; font-weight:600;
+  }
+  .color-chip.selected{ border-color:var(--teal); background:#eaf4f1; }
+  .color-chip .dot{ width:16px; height:16px; border-radius:50%; border:1px solid rgba(0,0,0,0.15); flex-shrink:0; }
+
+  .elapsed.w-ok{ color:#2c8a5a; }
+  .elapsed.w-warn{ color:#b3781f; }
+  .elapsed.w-late{ color:#c23c33; font-weight:700; }
+
+  .undo-btn{
+    background:#f1e4e4; color:#8a3a34; font-size:11.5px; font-weight:700;
+    padding:8px; margin-top:4px; width:100%;
+  }
+  .edit-toggle{
+    background:none; color:var(--teal-dark); font-size:12px; font-weight:700;
+    padding:4px 0; text-decoration:underline;
+  }
+  .edit-form{ display:none; margin:8px 0 4px; padding:10px; background:#f7faf9; border-radius:10px; }
+  .edit-form.open{ display:block; }
+  .edit-form input, .edit-form select{
+    width:100%; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px; font-size:13px; margin-bottom:8px;
+  }
+  .edit-form .save-edit{ background:var(--teal); color:#fff; font-weight:700; padding:8px; width:100%; font-size:12.5px; }
+
+  .dl-group{ display:flex; gap:8px; }
+  .dl-group button{ flex:1; padding:9px; font-size:12px; font-weight:700; }
+  .dl-txt{ background:var(--teal-dark); color:#fff; }
+  .dl-csv{ background:#3a6b62; color:#fff; }
+
+  .stat-card{
+    background:var(--card); border:1px solid var(--line); border-radius:12px;
+    padding:12px 14px; margin-bottom:10px;
+  }
+  .stat-card .sc-id{
+    font-family:var(--mono); font-weight:700; color:var(--teal-dark);
+    background:var(--amber-soft); padding:2px 7px; border-radius:6px; font-size:13px;
+  }
+  .stat-card .sc-tag{ font-size:12px; color:#5b6b6a; margin-left:6px; }
+  .stat-row{
+    display:flex; justify-content:space-between; font-size:12.5px; margin-top:8px;
+    font-family:var(--mono); color:#3a4a49;
+  }
+  .stat-row .dur{ font-weight:700; color:var(--teal-dark); }
+  .stat-row .pending{ color:#b3781f; font-style:italic; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Patient Queue Tracker</h1>
+  <div class="sub"><span class="conn-dot" id="connDot"></span><span id="connText">connecting…</span></div>
+  <div class="sub" id="queueStat" style="margin-top:2px;"></div>
+  <div class="tabs">
+    <div class="tab active" data-tab="add">+ Add</div>
+    <div class="tab" data-tab="active">Active</div>
+    <div class="tab" data-tab="completed">Completed</div>
+    <div class="tab" data-tab="alllogs">All Logs</div>
+    <div class="tab" data-tab="waittimes">Wait Times</div>
+    <div class="tab" data-tab="consult">Consultation</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ADD PATIENT -->
+  <section class="panel active" id="panel-add">
+    <div class="card">
+      <div class="field">
+        <label>Dress Colour</label>
+        <div class="swatch-row">
+          <div class="swatch" id="colorSwatch"></div>
+          <input type="text" id="dressColor" placeholder="Type any colour, or tap one below">
+        </div>
+        <div class="color-filter">
+          <input type="text" id="colorFilter" placeholder="Filter colours (e.g. blue, dark)...">
+        </div>
+        <div class="color-grid" id="colorGrid"></div>
+      </div>
+      <div class="row2">
+        <div class="field">
+          <label>Gender</label>
+          <select id="gender">
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Child">Child</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Age (approx)</label>
+          <input type="text" id="age" placeholder="e.g. ~60">
+        </div>
+      </div>
+      <div class="field">
+        <label>Note (optional)</label>
+        <textarea id="note" placeholder="Any identifying detail — e.g. wheelchair, with attendant, carrying file"></textarea>
+      </div>
+      <button class="btn-primary" id="addBtn">Add Patient &amp; Start Tracking</button>
+    </div>
+  </section>
+
+  <!-- ACTIVE -->
+  <section class="panel" id="panel-active">
+    <div class="search-wrap">
+      <input type="text" id="activeSearch" placeholder="Search: colour, gender, note, e.g. black, tall, spec...">
+    </div>
+    <div class="search-count" id="activeSearchCount"></div>
+    <div id="activeList"><div class="empty">No active patients yet.<br>Add one from the "+ Add" tab.</div></div>
+  </section>
+
+  <!-- COMPLETED -->
+  <section class="panel" id="panel-completed">
+    <div class="search-wrap">
+      <input type="text" id="completedSearch" placeholder="Search completed: colour, gender, note...">
+    </div>
+    <div class="search-count" id="completedSearchCount"></div>
+    <div id="completedList"><div class="empty">No completed patients yet.</div></div>
+  </section>
+
+  <!-- ALL LOGS (combined, all patients + general hospital notes) -->
+  <section class="panel" id="panel-alllogs">
+    <div class="note-row" style="margin-bottom:12px;">
+      <input type="text" id="generalNoteInput" placeholder="Add a general note (hospital, doctor, staff, etc.)...">
+      <button id="addGeneralNoteBtn">Log</button>
+    </div>
+    <div class="dl-group" style="margin-bottom:12px;">
+      <button class="dl-txt" id="downloadAllTxt">Download TXT</button>
+      <button class="dl-csv" id="downloadAllCsv">Download CSV</button>
+    </div>
+    <div class="global-log" id="globalLog">no entries yet</div>
+  </section>
+
+  <!-- WAIT TIMES: Reception -> Entry Consultancy -->
+  <section class="panel" id="panel-waittimes">
+    <div class="search-count" style="margin:0 0 10px;">Time between Reception Visiting and Entry Consultancy, per patient.</div>
+    <div class="dl-group" style="margin-bottom:12px;">
+      <button class="dl-txt" id="downloadWaitTxt">Download TXT</button>
+      <button class="dl-csv" id="downloadWaitCsv">Download CSV</button>
+    </div>
+    <div id="waitTimesList"><div class="empty">No data yet.</div></div>
+  </section>
+
+  <!-- CONSULTATION TIMES: Entry Consultancy -> Exit Consultancy -->
+  <section class="panel" id="panel-consult">
+    <div class="search-count" style="margin:0 0 10px;">Entry and exit time of Consultancy, per patient.</div>
+    <div class="dl-group" style="margin-bottom:12px;">
+      <button class="dl-txt" id="downloadConsultTxt">Download TXT</button>
+      <button class="dl-csv" id="downloadConsultCsv">Download CSV</button>
+    </div>
+    <div id="consultList"><div class="empty">No data yet.</div></div>
+  </section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
+import {
+  getDatabase, ref, push, set, update, get, onValue, child, remove
+} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-database.js";
+
+// --- Firebase config (from user) ---
+// NOTE: databaseURL was not included in the snippet you pasted (that snippet only
+// initializes Analytics). I've added the standard Realtime Database URL pattern for
+// your project ID below. Please confirm this matches the URL shown in
+// Firebase Console -> Realtime Database -> Data tab. If your DB is in a specific
+// region (e.g. asia-southeast1), the URL will look like:
+// https://observe-2d2ac-default-rtdb.asia-southeast1.firebasedatabase.app
+const firebaseConfig = {
+  apiKey: "AIzaSyAg2B_7xnX4KMRhNogT6wwUO8fF1mAFutw",
+  authDomain: "observe-2d2ac.firebaseapp.com",
+  databaseURL: "https://observe-2d2ac-default-rtdb.firebaseio.com",
+  projectId: "observe-2d2ac",
+  storageBucket: "observe-2d2ac.firebasestorage.app",
+  messagingSenderId: "48513857137",
+  appId: "1:48513857137:web:c08d996aa9310882584dd0"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// --- Connection status ---
+onValue(ref(db, ".info/connected"), (snap) => {
+  const dot = document.getElementById("connDot");
+  const txt = document.getElementById("connText");
+  if (snap.val() === true) {
+    dot.className = "conn-dot ok"; txt.textContent = "connected to database";
+  } else {
+    dot.className = "conn-dot err"; txt.textContent = "not connected — check databaseURL & rules";
+  }
+});
+
+// --- Tabs ---
+document.querySelectorAll(".tab").forEach(t => {
+  t.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+    t.classList.add("active");
+    document.getElementById("panel-" + t.dataset.tab).classList.add("active");
+  });
+});
+
+function toast(msg){
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  setTimeout(()=>el.classList.remove("show"), 1800);
+}
+
+function pad(n){ return String(n).padStart(2,"0"); }
+function fmtTs(d){
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+function elapsedSince(iso){
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(ms/60000);
+  if (mins < 60) return mins + "m";
+  return Math.floor(mins/60) + "h " + (mins%60) + "m";
+}
+function waitClass(iso){
+  const mins = Math.floor((Date.now() - new Date(iso).getTime())/60000);
+  if (mins >= 30) return "w-late";
+  if (mins >= 15) return "w-warn";
+  return "w-ok";
+}
+
+// live-updating elapsed timers
+setInterval(() => {
+  document.querySelectorAll("[data-elapsed-src]").forEach(el => {
+    el.textContent = "elapsed " + elapsedSince(el.dataset.elapsedSrc);
+    el.className = "elapsed " + waitClass(el.dataset.elapsedSrc);
+  });
+}, 30000);
+
+// crude colour name -> swatch preview
+const colorInput = document.getElementById("dressColor");
+const swatch = document.getElementById("colorSwatch");
+colorInput.addEventListener("input", () => {
+  swatch.style.background = colorInput.value.trim() || "#eee";
+  highlightSelectedChip();
+});
+
+// --- Colour palette (tap to select, still free-text friendly) ---
+const COLORS = [
+  ["Red","#d1382f"], ["Maroon","#7a1f22"], ["Pink","#e88fb0"], ["Hot Pink","#e0398a"],
+  ["Orange","#e08a2b"], ["Peach","#f2b98a"], ["Yellow","#e8c93a"], ["Mustard","#c9a227"],
+  ["Olive","#7d7a2e"], ["Green","#3c8a4c"], ["Dark Green","#2b5c34"], ["Teal","#1f6f66"],
+  ["Cyan","#3bb7c4"], ["Sky Blue","#6fb8e0"], ["Blue","#2f5fa8"], ["Navy Blue","#1c2f5e"],
+  ["Purple","#7d4ea3"], ["Lavender","#b6a6d9"], ["Magenta","#b23a8c"], ["Brown","#7a4a2e"],
+  ["Beige","#d8c6a8"], ["Cream","#efe6d0"], ["White","#ffffff"], ["Grey","#9aa0a3"],
+  ["Dark Grey","#5a5f61"], ["Black","#1a1a1a"], ["Gold","#c9a227"], ["Silver","#c7cdd0"],
+  ["Multicolour / Print","#c86bb0"], ["Denim Blue","#4a6a8a"]
+];
+
+function renderColorGrid(filter=""){
+  const grid = document.getElementById("colorGrid");
+  const q = filter.trim().toLowerCase();
+  const list = COLORS.filter(([name]) => name.toLowerCase().includes(q));
+  grid.innerHTML = list.map(([name, hex]) => `
+    <div class="color-chip" data-name="${name}" data-hex="${hex}">
+      <span class="dot" style="background:${hex}"></span>${name}
+    </div>
+  `).join("") || `<div style="font-size:12px;color:#8a9a99;padding:6px;">No colours match</div>`;
+
+  grid.querySelectorAll(".color-chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      colorInput.value = chip.dataset.name;
+      swatch.style.background = chip.dataset.hex;
+      highlightSelectedChip();
+    });
+  });
+}
+function highlightSelectedChip(){
+  const val = colorInput.value.trim().toLowerCase();
+  document.querySelectorAll(".color-chip").forEach(chip => {
+    chip.classList.toggle("selected", chip.dataset.name.toLowerCase() === val);
+  });
+}
+renderColorGrid();
+document.getElementById("colorFilter").addEventListener("input", (e) => renderColorGrid(e.target.value));
+
+// --- Add patient ---
+document.getElementById("addBtn").addEventListener("click", async () => {
+  const dressColor = document.getElementById("dressColor").value.trim();
+  const gender = document.getElementById("gender").value;
+  const age = document.getElementById("age").value.trim();
+  const note = document.getElementById("note").value.trim();
+
+  if (!dressColor){
+    toast("Please enter a dress colour to identify the patient");
+    return;
+  }
+
+  const counterRef = ref(db, "counter");
+  const snap = await get(counterRef);
+  const nextNum = (snap.exists() ? snap.val() : 0) + 1;
+  await set(counterRef, nextNum);
+  const patientId = "P" + String(nextNum).padStart(4, "0");
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+
+  const patientRef = ref(db, "patients/" + patientId);
+  await set(patientRef, {
+    id: patientId,
+    dressColor, gender, age, note,
+    createdAt: nowIso,
+    status: "active",
+    timeline: {}
+  });
+
+  const tlRef = push(ref(db, "patients/" + patientId + "/timeline"));
+  await set(tlRef, { ts: nowIso, label: "Entered Hospital", note: "" });
+
+  document.getElementById("dressColor").value = "";
+  document.getElementById("age").value = "";
+  document.getElementById("note").value = "";
+  swatch.style.background = "#eee";
+  highlightSelectedChip();
+
+  toast(patientId + " added");
+  document.querySelector('.tab[data-tab="active"]').click();
+});
+
+// --- Timeline action buttons config ---
+const ACTIONS = [
+  { label: "Reception Visiting" },
+  { label: "Entry Consultancy" },
+  { label: "Exit Consultancy" },
+  { label: "Paying Consultancy" },
+  { label: "Pharmacy" },
+  { label: "Entered Physio" },
+  { label: "Exited Physio" },
+  { label: "Exiting Hospital", completes: true }
+];
+
+async function logEvent(patientId, label, note=""){
+  const tlRef = push(ref(db, "patients/" + patientId + "/timeline"));
+  await set(tlRef, { ts: new Date().toISOString(), label, note });
+  toast(label + " logged for " + patientId);
+}
+
+async function completePatient(patientId){
+  await update(ref(db, "patients/" + patientId), { status: "completed", completedAt: new Date().toISOString() });
+  await logEvent(patientId, "Tracking Completed / Discharged");
+  toast(patientId + " marked completed");
+}
+
+async function reopenPatient(patientId){
+  await update(ref(db, "patients/" + patientId), { status: "active", completedAt: null });
+  await logEvent(patientId, "Re-opened for tracking");
+}
+
+async function undoLastEntry(p){
+  const entries = p.timeline ? Object.entries(p.timeline) : [];
+  if (!entries.length){ toast("No entries to undo"); return; }
+  entries.sort((a,b) => new Date(b[1].ts) - new Date(a[1].ts));
+  const [lastKey, lastVal] = entries[0];
+  await remove(ref(db, "patients/" + p.id + "/timeline/" + lastKey));
+  toast("Undid: " + lastVal.label);
+}
+
+function buildLogText(p){
+  const lines = [];
+  lines.push(`PATIENT ${p.id}`);
+  lines.push(`Identify by: ${p.gender || "-"}, dress colour: ${p.dressColor || "-"}${p.age ? ", age ~" + p.age : ""}`);
+  if (p.note) lines.push(`Note: ${p.note}`);
+  lines.push(`Status: ${p.status}`);
+  lines.push("-".repeat(40));
+  const entries = p.timeline ? Object.values(p.timeline).sort((a,b)=> new Date(a.ts) - new Date(b.ts)) : [];
+  entries.forEach(e => {
+    const d = new Date(e.ts);
+    lines.push(`[${fmtTs(d)}] ${p.id} - ${e.label}${e.note ? " :: " + e.note : ""}`);
+  });
+  return lines.join("\n");
+}
+
+function downloadTxt(filename, text){
+  const blob = new Blob([text], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(val){
+  const s = String(val ?? "");
+  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+function toCsv(rows){
+  return rows.map(r => r.map(csvEscape).join(",")).join("\n");
+}
+function downloadCsv(filename, rows){
+  const blob = new Blob([toCsv(rows)], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function buildLogRows(p){
+  const rows = [["Timestamp","Patient ID","Gender","Dress Colour","Event","Note"]];
+  const entries = p.timeline ? Object.values(p.timeline).sort((a,b)=> new Date(a.ts) - new Date(b.ts)) : [];
+  entries.forEach(e => {
+    rows.push([fmtTs(new Date(e.ts)), p.id, p.gender || "", p.dressColor || "", e.label, e.note || ""]);
+  });
+  return rows;
+}
+
+function renderTimelineHtml(p){
+  const entries = p.timeline ? Object.values(p.timeline).sort((a,b)=> new Date(a.ts) - new Date(b.ts)) : [];
+  if (!entries.length) return '<div class="log">no entries yet</div>';
+  const lines = entries.map(e => {
+    const d = new Date(e.ts);
+    return `<span class="ts">[${fmtTs(d)}]</span> <span class="ln">${p.id} - ${e.label}${e.note ? " :: " + e.note : ""}</span>`;
+  });
+  return `<div class="log">${lines.join("\n")}</div>`;
+}
+
+function buildPatientCard(p){
+  const wrap = document.createElement("div");
+  wrap.className = "p-card";
+  wrap.id = "card-" + p.id;
+
+  const head = document.createElement("div");
+  head.className = "p-head";
+  head.innerHTML = `
+    <span class="p-id">${p.id}</span>
+    <div class="p-meta">
+      <div class="name">${p.gender || "-"} · ${p.dressColor || "-"}</div>
+      ${p.note ? `<div class="features">${p.note}${p.age ? " · ~" + p.age + "y" : ""}</div>` : (p.age ? `<div class="features">~${p.age}y</div>` : "")}
+      <div class="elapsed ${waitClass(p.createdAt)}" data-elapsed-src="${p.createdAt}">elapsed ${elapsedSince(p.createdAt)}</div>
+    </div>
+    <span class="p-status ${p.status}">${p.status}</span>
+    <span class="chevron">▶</span>
+  `;
+  head.addEventListener("click", () => wrap.classList.toggle("open"));
+
+  const body = document.createElement("div");
+  body.className = "p-body";
+
+  const isActive = p.status === "active";
+
+  let actionsHtml = "";
+  if (isActive){
+    actionsHtml = `<div class="action-grid">${ACTIONS.map(a =>
+      `<button class="action-btn${a.completes ? " exit-btn" : ""}" data-label="${a.label}" data-completes="${a.completes ? "1":"0"}">${a.label}</button>`
+    ).join("")}</div>
+    <div class="note-row">
+      <input type="text" placeholder="Custom note..." class="custom-note">
+      <button class="add-note-btn">Log</button>
+    </div>`;
+  }
+
+  const footerHtml = isActive
+    ? `<div class="footer-actions">
+         <button class="btn-complete">Complete</button>
+       </div>
+       <div class="dl-group" style="margin-top:8px;">
+         <button class="dl-txt btn-download-txt">TXT</button>
+         <button class="dl-csv btn-download-csv">CSV</button>
+       </div>
+       <button class="undo-btn">↺ Undo last entry</button>`
+    : `<div class="footer-actions">
+         <button class="btn-reopen">Re-open</button>
+       </div>
+       <div class="dl-group" style="margin-top:8px;">
+         <button class="dl-txt btn-download-txt">TXT</button>
+         <button class="dl-csv btn-download-csv">CSV</button>
+       </div>`;
+
+  body.innerHTML = actionsHtml + renderTimelineHtml(p) + footerHtml;
+  wrap.appendChild(head);
+  wrap.appendChild(body);
+
+  if (isActive){
+    body.querySelectorAll(".action-btn").forEach(btn => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (btn.dataset.completes === "1"){
+          await logEvent(p.id, btn.dataset.label);
+          await completePatient(p.id);
+        } else {
+          logEvent(p.id, btn.dataset.label);
+        }
+      });
+    });
+    body.querySelector(".add-note-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const input = body.querySelector(".custom-note");
+      const val = input.value.trim();
+      if (!val) { toast("Type a note first"); return; }
+      logEvent(p.id, "Note", val);
+      input.value = "";
+    });
+    body.querySelector(".btn-complete").addEventListener("click", (e) => {
+      e.stopPropagation();
+      completePatient(p.id);
+    });
+    body.querySelector(".undo-btn").addEventListener("click", (e) => {
+      e.stopPropagation();
+      undoLastEntry(p);
+    });
+  } else {
+    body.querySelector(".btn-reopen").addEventListener("click", (e) => {
+      e.stopPropagation();
+      reopenPatient(p.id);
+    });
+  }
+  body.querySelector(".btn-download-txt").addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadTxt(p.id + "_log.txt", buildLogText(p));
+  });
+  body.querySelector(".btn-download-csv").addEventListener("click", (e) => {
+    e.stopPropagation();
+    downloadCsv(p.id + "_log.csv", buildLogRows(p));
+  });
+
+  return wrap;
+}
+
+// --- Live listeners for lists ---
+let allPatients = [];
+let allGeneralLogs = [];
+
+async function addGeneralNote(){
+  const input = document.getElementById("generalNoteInput");
+  const val = input.value.trim();
+  if (!val){ toast("Type a note first"); return; }
+  const glRef = push(ref(db, "generalLogs"));
+  await set(glRef, { ts: new Date().toISOString(), note: val });
+  input.value = "";
+  toast("Note logged");
+}
+document.getElementById("addGeneralNoteBtn").addEventListener("click", addGeneralNote);
+document.getElementById("generalNoteInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addGeneralNote();
+});
+
+function matchesSearch(p, q){
+  if (!q) return true;
+  const hay = [p.id, p.gender, p.dressColor, p.age, p.note].join(" ").toLowerCase();
+  return hay.includes(q);
+}
+
+function renderActiveList(){
+  const q = document.getElementById("activeSearch").value.trim().toLowerCase();
+  const activeList = document.getElementById("activeList");
+  const countEl = document.getElementById("activeSearchCount");
+  const openIds = new Set(
+    Array.from(document.querySelectorAll("#activeList .p-card.open")).map(el => el.id.replace("card-",""))
+  );
+
+  const activeP = allPatients
+    .filter(p => p.status === "active" && matchesSearch(p, q))
+    .sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt)); // longest-waiting first
+
+  countEl.textContent = q ? `${activeP.length} match${activeP.length===1?"":"es"} for "${q}"` : "";
+
+  activeList.innerHTML = "";
+  if (!activeP.length){
+    activeList.innerHTML = q
+      ? '<div class="empty">No active patients match that search.</div>'
+      : '<div class="empty">No active patients yet.<br>Add one from the "+ Add" tab.</div>';
+  } else {
+    activeP.forEach(p => {
+      const card = buildPatientCard(p);
+      if (openIds.has(p.id)) card.classList.add("open");
+      activeList.appendChild(card);
+    });
+  }
+}
+
+function renderCompletedList(){
+  const q = document.getElementById("completedSearch").value.trim().toLowerCase();
+  const completedList = document.getElementById("completedList");
+  const countEl = document.getElementById("completedSearchCount");
+  const openIds = new Set(
+    Array.from(document.querySelectorAll("#completedList .p-card.open")).map(el => el.id.replace("card-",""))
+  );
+  const completedP = allPatients.filter(p => p.status !== "active" && matchesSearch(p, q));
+
+  countEl.textContent = q ? `${completedP.length} match${completedP.length===1?"":"es"} for "${q}"` : "";
+
+  completedList.innerHTML = "";
+  if (!completedP.length){
+    completedList.innerHTML = q
+      ? '<div class="empty">No completed patients match that search.</div>'
+      : '<div class="empty">No completed patients yet.</div>';
+  } else {
+    completedP.slice().reverse().forEach(p => {
+      const card = buildPatientCard(p);
+      if (openIds.has(p.id)) card.classList.add("open");
+      completedList.appendChild(card);
+    });
+  }
+}
+
+function buildCombinedLogText(){
+  const rows = [];
+  allPatients.forEach(p => {
+    const entries = p.timeline ? Object.values(p.timeline) : [];
+    entries.forEach(e => rows.push({ pid: p.id, ts: e.ts, label: e.label, note: e.note }));
+  });
+  allGeneralLogs.forEach(g => rows.push({ pid: "HOSPITAL", ts: g.ts, label: "Note", note: g.note }));
+  rows.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+  const lines = rows.map(r => {
+    const d = new Date(r.ts);
+    return `[${fmtTs(d)}] ${r.pid} - ${r.label}${r.note ? " :: " + r.note : ""}`;
+  });
+  return lines.length ? lines.join("\n") : "no entries yet";
+}
+
+function buildCombinedLogRows(){
+  const rows = [["Timestamp","Patient ID","Gender","Dress Colour","Event","Note"]];
+  const flat = [];
+  allPatients.forEach(p => {
+    const entries = p.timeline ? Object.values(p.timeline) : [];
+    entries.forEach(e => flat.push({ pid: p.id, gender: p.gender || "", color: p.dressColor || "", ts: e.ts, label: e.label, note: e.note || "" }));
+  });
+  allGeneralLogs.forEach(g => flat.push({ pid: "HOSPITAL", gender: "", color: "", ts: g.ts, label: "Note", note: g.note || "" }));
+  flat.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+  flat.forEach(r => rows.push([fmtTs(new Date(r.ts)), r.pid, r.gender, r.color, r.label, r.note]));
+  return rows;
+}
+
+// --- Stage timing helpers: earliest occurrence of a label in a patient's timeline ---
+function firstEventTime(p, label){
+  const entries = p.timeline ? Object.values(p.timeline) : [];
+  const matches = entries.filter(e => e.label === label).sort((a,b)=> new Date(a.ts) - new Date(b.ts));
+  return matches.length ? matches[0].ts : null;
+}
+function minutesBetween(tsA, tsB){
+  return Math.round((new Date(tsB).getTime() - new Date(tsA).getTime()) / 60000);
+}
+function durLabel(mins){
+  if (mins < 60) return mins + "m";
+  return Math.floor(mins/60) + "h " + (mins%60) + "m";
+}
+
+function computeWaitTimes(){
+  return allPatients.map(p => {
+    const reception = firstEventTime(p, "Reception Visiting");
+    const consult = firstEventTime(p, "Entry Consultancy");
+    const waitMin = (reception && consult) ? minutesBetween(reception, consult) : null;
+    return { p, reception, consult, waitMin };
+  }).filter(r => r.reception || r.consult);
+}
+function computeConsultTimes(){
+  return allPatients.map(p => {
+    const entry = firstEventTime(p, "Entry Consultancy");
+    const exit = firstEventTime(p, "Exit Consultancy");
+    const durMin = (entry && exit) ? minutesBetween(entry, exit) : null;
+    return { p, entry, exit, durMin };
+  }).filter(r => r.entry || r.exit);
+}
+
+function renderWaitTimes(){
+  const data = computeWaitTimes();
+  const el = document.getElementById("waitTimesList");
+  if (!data.length){ el.innerHTML = '<div class="empty">No reception or consultancy entries logged yet.</div>'; return; }
+  el.innerHTML = data.map(r => `
+    <div class="stat-card">
+      <span class="sc-id">${r.p.id}</span><span class="sc-tag">${r.p.gender || "-"} · ${r.p.dressColor || "-"}</span>
+      <div class="stat-row"><span>Reception</span><span>${r.reception ? fmtTs(new Date(r.reception)) : "—"}</span></div>
+      <div class="stat-row"><span>Entry Consultancy</span><span>${r.consult ? fmtTs(new Date(r.consult)) : "—"}</span></div>
+      <div class="stat-row"><span>Wait time</span>${r.waitMin !== null ? `<span class="dur">${durLabel(r.waitMin)}</span>` : `<span class="pending">pending</span>`}</div>
+    </div>
+  `).join("");
+}
+
+function renderConsultTimes(){
+  const data = computeConsultTimes();
+  const el = document.getElementById("consultList");
+  if (!data.length){ el.innerHTML = '<div class="empty">No consultancy entries logged yet.</div>'; return; }
+  el.innerHTML = data.map(r => `
+    <div class="stat-card">
+      <span class="sc-id">${r.p.id}</span><span class="sc-tag">${r.p.gender || "-"} · ${r.p.dressColor || "-"}</span>
+      <div class="stat-row"><span>Entry Consultancy</span><span>${r.entry ? fmtTs(new Date(r.entry)) : "—"}</span></div>
+      <div class="stat-row"><span>Exit Consultancy</span><span>${r.exit ? fmtTs(new Date(r.exit)) : "—"}</span></div>
+      <div class="stat-row"><span>Duration</span>${r.durMin !== null ? `<span class="dur">${durLabel(r.durMin)}</span>` : `<span class="pending">in progress</span>`}</div>
+    </div>
+  `).join("");
+}
+
+function buildWaitTimesText(){
+  const data = computeWaitTimes();
+  if (!data.length) return "no data yet";
+  return data.map(r =>
+    `${r.p.id} (${r.p.gender || "-"}, ${r.p.dressColor || "-"}) | Reception: ${r.reception ? fmtTs(new Date(r.reception)) : "-"} | Entry Consultancy: ${r.consult ? fmtTs(new Date(r.consult)) : "-"} | Wait: ${r.waitMin !== null ? durLabel(r.waitMin) : "pending"}`
+  ).join("\n");
+}
+function buildWaitTimesRows(){
+  const rows = [["Patient ID","Gender","Dress Colour","Reception Time","Entry Consultancy Time","Wait (minutes)"]];
+  computeWaitTimes().forEach(r => rows.push([
+    r.p.id, r.p.gender || "", r.p.dressColor || "",
+    r.reception ? fmtTs(new Date(r.reception)) : "",
+    r.consult ? fmtTs(new Date(r.consult)) : "",
+    r.waitMin !== null ? r.waitMin : ""
+  ]));
+  return rows;
+}
+function buildConsultTimesText(){
+  const data = computeConsultTimes();
+  if (!data.length) return "no data yet";
+  return data.map(r =>
+    `${r.p.id} (${r.p.gender || "-"}, ${r.p.dressColor || "-"}) | Entry: ${r.entry ? fmtTs(new Date(r.entry)) : "-"} | Exit: ${r.exit ? fmtTs(new Date(r.exit)) : "-"} | Duration: ${r.durMin !== null ? durLabel(r.durMin) : "in progress"}`
+  ).join("\n");
+}
+function buildConsultTimesRows(){
+  const rows = [["Patient ID","Gender","Dress Colour","Entry Consultancy Time","Exit Consultancy Time","Duration (minutes)"]];
+  computeConsultTimes().forEach(r => rows.push([
+    r.p.id, r.p.gender || "", r.p.dressColor || "",
+    r.entry ? fmtTs(new Date(r.entry)) : "",
+    r.exit ? fmtTs(new Date(r.exit)) : "",
+    r.durMin !== null ? r.durMin : ""
+  ]));
+  return rows;
+}
+
+function renderGlobalLog(){
+  const rows = [];
+  allPatients.forEach(p => {
+    const entries = p.timeline ? Object.values(p.timeline) : [];
+    entries.forEach(e => rows.push({ pid: p.id, ts: e.ts, label: e.label, note: e.note }));
+  });
+  allGeneralLogs.forEach(g => rows.push({ pid: "HOSPITAL", ts: g.ts, label: "Note", note: g.note }));
+  rows.sort((a,b) => new Date(a.ts) - new Date(b.ts));
+  const el = document.getElementById("globalLog");
+  if (!rows.length){ el.textContent = "no entries yet"; return; }
+  el.innerHTML = rows.map(r => {
+    const d = new Date(r.ts);
+    return `<span class="ts">[${fmtTs(d)}]</span> <span class="pid">${r.pid}</span> <span class="ln">- ${r.label}${r.note ? " :: " + r.note : ""}</span>`;
+  }).join("\n");
+}
+
+document.getElementById("activeSearch").addEventListener("input", renderActiveList);
+document.getElementById("completedSearch").addEventListener("input", renderCompletedList);
+document.getElementById("downloadAllTxt").addEventListener("click", () => {
+  downloadTxt("hospital_combined_log.txt", buildCombinedLogText());
+});
+document.getElementById("downloadAllCsv").addEventListener("click", () => {
+  downloadCsv("hospital_combined_log.csv", buildCombinedLogRows());
+});
+document.getElementById("downloadWaitTxt").addEventListener("click", () => {
+  downloadTxt("wait_times.txt", buildWaitTimesText());
+});
+document.getElementById("downloadWaitCsv").addEventListener("click", () => {
+  downloadCsv("wait_times.csv", buildWaitTimesRows());
+});
+document.getElementById("downloadConsultTxt").addEventListener("click", () => {
+  downloadTxt("consultation_times.txt", buildConsultTimesText());
+});
+document.getElementById("downloadConsultCsv").addEventListener("click", () => {
+  downloadCsv("consultation_times.csv", buildConsultTimesRows());
+});
+
+onValue(ref(db, "patients"), (snap) => {
+  const data = snap.val() || {};
+  allPatients = Object.values(data).sort((a,b) => a.id.localeCompare(b.id));
+  renderActiveList();
+  renderCompletedList();
+  renderGlobalLog();
+  renderWaitTimes();
+  renderConsultTimes();
+
+  const activeCount = allPatients.filter(p => p.status === "active").length;
+  const statEl = document.getElementById("queueStat");
+  if (!activeCount){
+    statEl.textContent = "No patients waiting";
+  } else {
+    const oldest = allPatients
+      .filter(p => p.status === "active")
+      .sort((a,b) => new Date(a.createdAt) - new Date(b.createdAt))[0];
+    statEl.textContent = `${activeCount} waiting · longest wait ${elapsedSince(oldest.createdAt)}`;
+  }
+});
+
+onValue(ref(db, "generalLogs"), (snap) => {
+  const data = snap.val() || {};
+  allGeneralLogs = Object.values(data).sort((a,b) => new Date(a.ts) - new Date(b.ts));
+  renderGlobalLog();
+});
+</script>
+</body>
+</html>
