@@ -142,6 +142,17 @@
     background:var(--amber); color:#fff; font-weight:700; padding:0 16px; font-size:13px;
   }
 
+  .time-toggle-row{
+    display:flex; align-items:center; gap:8px; margin:-4px 0 10px; flex-wrap:wrap;
+  }
+  .time-toggle-row label{
+    font-size:12px; color:#5b6b6a; display:flex; align-items:center; gap:5px; cursor:pointer;
+  }
+  .time-toggle-row input[type=checkbox]{ width:15px; height:15px; }
+  .time-toggle-row input[type=datetime-local]{
+    padding:6px 8px; border:1.5px solid var(--line); border-radius:8px; font-size:12.5px; flex:1; min-width:170px;
+  }
+
   .log{
     background:#0f1b1a; color:#9fe6c4; font-family:var(--mono); font-size:12px;
     padding:12px; border-radius:10px; max-height:220px; overflow-y:auto;
@@ -330,9 +341,13 @@
 
   <!-- ALL LOGS (combined, all patients + general hospital notes) -->
   <section class="panel" id="panel-alllogs">
-    <div class="note-row" style="margin-bottom:12px;">
+    <div class="note-row" style="margin-bottom:6px;">
       <input type="text" id="generalNoteInput" placeholder="Add a general note (hospital, doctor, staff, etc.)...">
       <button id="addGeneralNoteBtn">Log</button>
+    </div>
+    <div class="time-toggle-row">
+      <label><input type="checkbox" id="generalTimeToggle"> Custom time</label>
+      <input type="datetime-local" id="generalTimeInput" style="display:none;">
     </div>
     <div class="dl-group" style="margin-bottom:12px;">
       <button class="dl-txt" id="downloadAllTxt">Download TXT</button>
@@ -434,6 +449,15 @@ function waitClass(iso){
   if (mins >= 30) return "w-late";
   if (mins >= 15) return "w-warn";
   return "w-ok";
+}
+function nowLocalValue(){
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0,16);
+}
+function localValueToIso(val){
+  if (!val) return null;
+  return new Date(val).toISOString();
 }
 
 // live-updating elapsed timers
@@ -546,21 +570,31 @@ const ACTIONS = [
   { label: "Exiting Hospital", completes: true }
 ];
 
-async function logEvent(patientId, label, note=""){
+async function logEvent(patientId, label, note="", customTs=null){
   const tlRef = push(ref(db, "patients/" + patientId + "/timeline"));
-  await set(tlRef, { ts: new Date().toISOString(), label, note });
-  toast(label + " logged for " + patientId);
+  await set(tlRef, { ts: customTs || new Date().toISOString(), label, note });
+  toast(label + " logged for " + patientId + (customTs ? " (custom time)" : ""));
 }
 
-async function completePatient(patientId){
-  await update(ref(db, "patients/" + patientId), { status: "completed", completedAt: new Date().toISOString() });
-  await logEvent(patientId, "Tracking Completed / Discharged");
+async function completePatient(patientId, customTs=null){
+  const ts = customTs || new Date().toISOString();
+  await update(ref(db, "patients/" + patientId), { status: "completed", completedAt: ts });
+  await logEvent(patientId, "Tracking Completed / Discharged", "", customTs);
   toast(patientId + " marked completed");
 }
 
-async function reopenPatient(patientId){
-  await update(ref(db, "patients/" + patientId), { status: "active", completedAt: null });
-  await logEvent(patientId, "Re-opened for tracking");
+async function reopenPatient(p){
+  const entries = p.timeline ? Object.entries(p.timeline) : [];
+  const latestOf = (label) => entries
+    .filter(([,v]) => v.label === label)
+    .sort((a,b) => new Date(b[1].ts) - new Date(a[1].ts))[0];
+  const toRemove = [latestOf("Exiting Hospital"), latestOf("Tracking Completed / Discharged")].filter(Boolean);
+  for (const [key] of toRemove){
+    await remove(ref(db, "patients/" + p.id + "/timeline/" + key));
+  }
+  await update(ref(db, "patients/" + p.id), { status: "active", completedAt: null });
+  toast(p.id + " moved back to Active");
+  document.querySelector('.tab[data-tab="active"]').click();
 }
 
 async function undoLastEntry(p){
@@ -661,8 +695,12 @@ function buildPatientCard(p){
     actionsHtml = `<div class="action-grid">${ACTIONS.map(a =>
       `<button class="action-btn${a.completes ? " exit-btn" : ""}" data-label="${a.label}" data-completes="${a.completes ? "1":"0"}">${a.label}</button>`
     ).join("")}</div>
+    <div class="time-toggle-row">
+      <label><input type="checkbox" class="custom-time-toggle"> Custom time</label>
+      <input type="datetime-local" class="custom-time-input" style="display:none;" value="${nowLocalValue()}">
+    </div>
     <div class="note-row">
-      <input type="text" placeholder="Custom note..." class="custom-note">
+      <input type="text" placeholder="Note (attaches to next action, or tap Log to save alone)..." class="custom-note">
       <button class="add-note-btn">Log</button>
     </div>`;
   }
@@ -689,15 +727,32 @@ function buildPatientCard(p){
   wrap.appendChild(body);
 
   if (isActive){
+    const timeToggle = body.querySelector(".custom-time-toggle");
+    const timeInput = body.querySelector(".custom-time-input");
+    timeToggle.addEventListener("click", (e) => e.stopPropagation());
+    timeToggle.addEventListener("change", () => {
+      timeInput.style.display = timeToggle.checked ? "block" : "none";
+      if (timeToggle.checked) timeInput.value = nowLocalValue();
+    });
+    timeInput.addEventListener("click", (e) => e.stopPropagation());
+
+    function getCustomTs(){
+      return (timeToggle.checked && timeInput.value) ? localValueToIso(timeInput.value) : null;
+    }
+
     body.querySelectorAll(".action-btn").forEach(btn => {
       btn.addEventListener("click", async (e) => {
         e.stopPropagation();
+        const noteInput = body.querySelector(".custom-note");
+        const attachedNote = noteInput.value.trim();
+        const customTs = getCustomTs();
         if (btn.dataset.completes === "1"){
-          await logEvent(p.id, btn.dataset.label);
-          await completePatient(p.id);
+          await logEvent(p.id, btn.dataset.label, attachedNote, customTs);
+          await completePatient(p.id, customTs);
         } else {
-          logEvent(p.id, btn.dataset.label);
+          await logEvent(p.id, btn.dataset.label, attachedNote, customTs);
         }
+        noteInput.value = "";
       });
     });
     body.querySelector(".add-note-btn").addEventListener("click", (e) => {
@@ -705,12 +760,12 @@ function buildPatientCard(p){
       const input = body.querySelector(".custom-note");
       const val = input.value.trim();
       if (!val) { toast("Type a note first"); return; }
-      logEvent(p.id, "Note", val);
+      logEvent(p.id, "Note", val, getCustomTs());
       input.value = "";
     });
     body.querySelector(".btn-complete").addEventListener("click", (e) => {
       e.stopPropagation();
-      completePatient(p.id);
+      completePatient(p.id, getCustomTs());
     });
     body.querySelector(".undo-btn").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -719,7 +774,7 @@ function buildPatientCard(p){
   } else {
     body.querySelector(".btn-reopen").addEventListener("click", (e) => {
       e.stopPropagation();
-      reopenPatient(p.id);
+      reopenPatient(p);
     });
   }
   body.querySelector(".btn-download-txt").addEventListener("click", (e) => {
@@ -742,14 +797,22 @@ async function addGeneralNote(){
   const input = document.getElementById("generalNoteInput");
   const val = input.value.trim();
   if (!val){ toast("Type a note first"); return; }
+  const toggle = document.getElementById("generalTimeToggle");
+  const timeInput = document.getElementById("generalTimeInput");
+  const ts = (toggle.checked && timeInput.value) ? localValueToIso(timeInput.value) : new Date().toISOString();
   const glRef = push(ref(db, "generalLogs"));
-  await set(glRef, { ts: new Date().toISOString(), note: val });
+  await set(glRef, { ts, note: val });
   input.value = "";
-  toast("Note logged");
+  toast("Note logged" + (toggle.checked ? " (custom time)" : ""));
 }
 document.getElementById("addGeneralNoteBtn").addEventListener("click", addGeneralNote);
 document.getElementById("generalNoteInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") addGeneralNote();
+});
+document.getElementById("generalTimeToggle").addEventListener("change", (e) => {
+  const timeInput = document.getElementById("generalTimeInput");
+  timeInput.style.display = e.target.checked ? "block" : "none";
+  if (e.target.checked) timeInput.value = nowLocalValue();
 });
 
 function matchesSearch(p, q){
